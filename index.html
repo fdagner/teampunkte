@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team-Punktezähler</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: white;
+        }
+
+        .teams-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .team {
+            border: 1px solid #ccc;
+            padding: 15px;
+            width: 400px;
+            border-radius: 5px;
+            text-align: center;
+            background-color: #f9f9f9;
+        }
+
+        .team h2 {
+            margin: 0 0 10px;
+        }
+
+        .team input {
+            font-size: 2.0rem;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 5px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .score {
+            font-size: 3rem;
+            margin: 10px 0;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 15px;
+            font-size: 1rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #007BFF;
+            color: #fff;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .delete-button {
+            background-color: #FF4C4C;
+        }
+
+        .delete-button:hover {
+            background-color: #cc0000;
+        }
+
+        #clearStorageButton {
+            background-color: #FF8C00;
+            margin-top: 20px;
+        }
+
+        #clearStorageButton:hover {
+            background-color: #e07b00;
+        }
+
+        #timerContainer {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        #timerDisplay {
+            font-size: 5rem;
+            margin-bottom: 10px;
+        }
+
+        #timeInput {
+            font-size: 1.5rem;
+            width: 100px;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        #errorMessage {
+            color: red;
+            font-size: 1.2rem;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Team-Punktezähler</h1>
+    <button id="fullscreenButton">Vollbild</button>
+    <button id="addTeamButton">Neues Team erstellen</button>
+    <button id="clearStorageButton">Neues Spiel</button><br>
+    Zeitgeber in Sekunden: <input type="number" id="timeInput" value="60" min="3" max="900" />
+    <div id="errorMessage">Bitte eine Zahl zwischen 3 und 900 eingeben.</div>
+    <div id="timerContainer">
+        <div><span id="timerDisplay">01:00</span></div>
+        <div class="button-container">
+            <button id="startPauseButton">Start</button>
+            <button id="resetButton">Zurücksetzen</button>
+        </div>
+    </div>
+    <div class="teams-container" id="teamsContainer"></div>
+    <!-- Audio-Element für den Timer-Alarm -->
+    <audio id="endAudio" src="end.mp3" preload="auto"></audio>
+    <script>
+        let teamCount = 0;
+        let countdownTimer;
+        let remainingTime;
+        let isTimerRunning = false;
+
+        // Funktion, um den aktuellen Stand aus LocalStorage zu laden
+        function loadTeamsFromStorage() {
+            const teams = JSON.parse(localStorage.getItem('teams')) || [];
+            teams.forEach(team => {
+                addTeamToUI(team.name, team.score);
+            });
+        }
+
+        // Funktion, um die Teams im LocalStorage zu speichern
+        function saveTeamsToStorage() {
+            const teams = [];
+            document.querySelectorAll('.team').forEach(teamDiv => {
+                const teamName = teamDiv.querySelector('input').value;
+                const score = teamDiv.querySelector('.score').textContent;
+                teams.push({ name: teamName, score: parseInt(score, 10) });
+            });
+            localStorage.setItem('teams', JSON.stringify(teams));
+        }
+
+        // Team hinzufügen und im UI anzeigen
+        function addTeamToUI(teamName = `Team ${teamCount + 1}`, score = 0) {
+            teamCount++;
+            const teamId = `team-${teamCount}`;
+
+            const teamDiv = document.createElement("div");
+            teamDiv.className = "team";
+            teamDiv.id = teamId;
+
+            const teamTitleInput = document.createElement("input");
+            teamTitleInput.type = "text";
+            teamTitleInput.value = teamName;
+            teamTitleInput.title = "Teamname bearbeiten";
+
+            // Event Listener für die Bearbeitung des Teamnamens
+            teamTitleInput.addEventListener("input", () => {
+                saveTeamsToStorage(); // Beim Ändern des Teamnamens sofort speichern
+            });
+
+            const scoreDisplay = document.createElement("div");
+            scoreDisplay.className = "score";
+            scoreDisplay.textContent = score;
+
+            const buttonContainer = document.createElement("div");
+            buttonContainer.className = "button-container";
+
+            const addButton = document.createElement("button");
+            addButton.textContent = "+ Punkte";
+            addButton.addEventListener("click", () => {
+                const currentScore = parseInt(scoreDisplay.textContent, 10);
+                scoreDisplay.textContent = currentScore + 1;
+                saveTeamsToStorage(); // Nach Änderung speichern
+            });
+
+            const subtractButton = document.createElement("button");
+            subtractButton.textContent = "- Punkte";
+            subtractButton.addEventListener("click", () => {
+                const currentScore = parseInt(scoreDisplay.textContent, 10);
+                scoreDisplay.textContent = Math.max(0, currentScore - 1);
+                saveTeamsToStorage(); // Nach Änderung speichern
+            });
+
+            const deleteButton = document.createElement("button");
+            deleteButton.className = "delete-button";
+            deleteButton.textContent = "Team löschen";
+            deleteButton.addEventListener("click", () => {
+                document.getElementById("teamsContainer").removeChild(teamDiv);
+                saveTeamsToStorage(); // Nach Löschen speichern
+            });
+
+            buttonContainer.appendChild(addButton);
+            buttonContainer.appendChild(subtractButton);
+            teamDiv.appendChild(teamTitleInput);
+            teamDiv.appendChild(scoreDisplay);
+            teamDiv.appendChild(buttonContainer);
+            teamDiv.appendChild(deleteButton);
+
+            document.getElementById("teamsContainer").appendChild(teamDiv);
+            saveTeamsToStorage(); // Nach Hinzufügen speichern
+        }
+
+
+        // Funktion, um den Speicher zu leeren
+        function clearStorage() {
+            localStorage.removeItem('teams');
+            localStorage.removeItem('timer'); // Entfernen des Timerwerts
+            document.getElementById("teamsContainer").innerHTML = '';
+            teamCount = 0; // Rücksetzen der Teamanzahl
+            remainingTime = 60; // Zurücksetzen auf Standardwert
+            updateTimerDisplay(); // Timer neu aktualisieren
+        }
+
+        // Countdown-Funktion
+        function startCountdown() {
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+            }
+
+            countdownTimer = setInterval(() => {
+                if (remainingTime <= 0) {
+                    clearInterval(countdownTimer);
+                    document.getElementById("endAudio").play(); // Audio abspielen
+                    return;
+                }
+                remainingTime--;
+                updateTimerDisplay();
+            }, 1000);
+        }
+
+        // Timer aktualisieren
+        function updateTimerDisplay() {
+            const minutes = Math.floor(remainingTime / 60);
+            const seconds = remainingTime % 60;
+            document.getElementById("timerDisplay").textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        // Beim Ändern des Input-Felds die Zeit aktualisieren
+        document.getElementById("timeInput").addEventListener("input", function () {
+            const inputValue = this.value;
+            const errorMessage = document.getElementById("errorMessage");
+
+            if (inputValue < 3 || inputValue > 900) {
+                errorMessage.style.display = "block"; // Zeige Fehlermeldung
+                return;
+            } else {
+                errorMessage.style.display = "none"; // Verstecke Fehlermeldung
+            }
+
+            if (inputValue >= 3 && inputValue <= 900) {
+                remainingTime = parseInt(inputValue, 10);
+                updateTimerDisplay();
+                localStorage.setItem('timer', inputValue); // Speichern des neuen Werts im LocalStorage
+            }
+        });
+
+        // Timer starten / pausieren
+        document.getElementById("startPauseButton").addEventListener("click", function () {
+            if (isTimerRunning) {
+                clearInterval(countdownTimer);
+                this.textContent = "Start";
+            } else {
+                startCountdown();
+                this.textContent = "Pause";
+            }
+            isTimerRunning = !isTimerRunning;
+        });
+
+        // Timer zurücksetzen (nutzt den gespeicherten Wert)
+        document.getElementById("resetButton").addEventListener("click", function () {
+            clearInterval(countdownTimer);
+            const savedTimer = localStorage.getItem('timer');
+            remainingTime = savedTimer ? parseInt(savedTimer, 10) : 60; // Wenn kein Wert gespeichert, Standardwert 60 Sekunden
+            updateTimerDisplay();
+            document.getElementById("startPauseButton").textContent = "Start";
+            isTimerRunning = false;
+        });
+
+  // Vollbild 
+        document.getElementById("fullscreenButton").addEventListener("click", function() {
+    if (document.fullscreenElement || 
+        document.mozFullScreenElement || 
+        document.webkitFullscreenElement || 
+        document.msFullscreenElement) {
+        // Wenn wir bereits im Vollbildmodus sind, beenden wir ihn
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.mozCancelFullScreen) { // Firefox
+            document.mozCancelFullScreen();
+        } else if (document.webkitExitFullscreen) { // Chrome, Safari und Opera
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) { // IE/Edge
+            document.msExitFullscreen();
+        }
+    } else {
+        // Wenn wir nicht im Vollbildmodus sind, aktivieren wir ihn
+        if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+        } else if (document.documentElement.mozRequestFullScreen) { // Firefox
+            document.documentElement.mozRequestFullScreen();
+        } else if (document.documentElement.webkitRequestFullscreen) { // Chrome, Safari und Opera
+            document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) { // IE/Edge
+            document.documentElement.msRequestFullscreen();
+        }
+    }
+});
+
+
+        // Beim Laden der Seite Teams und Timer aus dem Local Storage laden
+        window.addEventListener('load', () => {
+            loadTeamsFromStorage();
+            const savedTimer = localStorage.getItem('timer');
+            remainingTime = savedTimer ? parseInt(savedTimer, 10) : 60; // Wenn kein Wert gespeichert, Standardwert 60 Sekunden
+            updateTimerDisplay(); // Zeigt die gespeicherte Zeit oder Standardzeit an
+        });
+
+        // Speichern des Timerwerts in LocalStorage, wenn der Timer geändert wird
+        window.addEventListener('beforeunload', () => {
+            localStorage.setItem('timer', remainingTime); // Timerwert speichern, bevor die Seite verlassen wird
+        });
+
+        document.getElementById("addTeamButton").addEventListener("click", () => {
+            addTeamToUI();
+        });
+
+        document.getElementById("clearStorageButton").addEventListener("click", () => {
+            clearStorage();
+        });
+    </script>
+</body>
+
+</html>
